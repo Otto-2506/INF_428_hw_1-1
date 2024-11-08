@@ -10,12 +10,10 @@ def calculate_department_mean_score(threat_scores):
     return np.mean(threat_scores)
 
 def calculate_aggregated_threat_score(department_scores, department_importance):
-    """
-    - Агрегированный уровень угрозы безопасности для всей компании.
-    """
+    
     weighted_sum = sum(mean * importance for mean, importance in zip(department_scores, department_importance))
     total_importance = sum(department_importance)
-    return min(max(weighted_sum / total_importance, 0), 90)  # Ensure result is within 0-90 range
+    return min(max(weighted_sum / total_importance, 0), 90)
 
 class TestThreatScoreAnalytics(unittest.TestCase):
 
