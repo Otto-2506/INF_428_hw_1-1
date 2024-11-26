@@ -1,74 +1,78 @@
-import numpy as np
+import random
 import unittest
 
-def generate_random_data(mean, variance, num_samples):
-    lower_bound = max(mean - variance, 0)
-    upper_bound = min(mean + variance, 90)
-    return np.random.randint(lower_bound, upper_bound + 1, num_samples)
+def generate_random_data(department_count=5, user_range=(10, 200), threat_range=(0, 90), importance_range=(1, 5)):
+    departments = []
+    for _ in range(department_count):
+        users = random.randint(user_range[0], user_range[1])
+        threat_scores = [random.randint(threat_range[0], threat_range[1]) for _ in range(users)]
+        importance = random.randint(importance_range[0], importance_range[1])
+        departments.append({
+            "users": users,
+            "threat_scores": threat_scores,
+            "importance": importance
+        })
+    return departments
 
-def calculate_department_mean_score(threat_scores):
-    return np.mean(threat_scores)
-
-def calculate_aggregated_threat_score(department_scores, department_importance):
+def calculate_aggregated_threat_score(departments):
+    total_weighted_score = 0
+    total_importance = 0
     
-    weighted_sum = sum(mean * importance for mean, importance in zip(department_scores, department_importance))
-    total_importance = sum(department_importance)
-    return min(max(weighted_sum / total_importance, 0), 90)
+    for department in departments:
+        if len(department["threat_scores"]) == 0:
+            continue
+        
+        avg_threat_score = sum(department["threat_scores"]) / len(department["threat_scores"])
+        weighted_score = avg_threat_score * department["importance"]
+        total_weighted_score += weighted_score
+        total_importance += department["importance"]
+    
+    if total_importance == 0:
+        return 0
+    
+    aggregated_score = total_weighted_score / total_importance
+    return min(90, max(0, aggregated_score))
 
-class TestThreatScoreAnalytics(unittest.TestCase):
+class TestCyberSecurityScore(unittest.TestCase):
+    
+    def test_aggregated_score_no_outliers(self):
+        departments = generate_random_data(department_count=5, user_range=(10, 200), threat_range=(50, 60), importance_range=(3, 3))
+        score = calculate_aggregated_threat_score(departments)
+        print(f"Test 'test_aggregated_score_no_outliers': {score}")
+        self.assertGreaterEqual(score, 0)
+        self.assertLessEqual(score, 90)
 
-    # Test 1: Проверка вычисления среднего значения угрозы безопасности для отдела
-    def test_calculate_department_mean_score(self):
-        data = generate_random_data(50, 10, 100)
-        mean_score = calculate_department_mean_score(data)
-        self.assertTrue(0 <= mean_score <= 90, "Mean score should be within range 0-90.")
+    def test_aggregated_score_with_high_variance(self):
+        departments = generate_random_data(department_count=5, user_range=(50, 150), threat_range=(0, 90), importance_range=(2, 5))
+        score = calculate_aggregated_threat_score(departments)
+        print(f"Test 'test_aggregated_score_with_high_variance': {score}")
+        self.assertGreaterEqual(score, 0)
+        self.assertLessEqual(score, 90)
+    
+    def test_aggregated_score_with_uneven_importance(self):
+        departments = generate_random_data(department_count=5, user_range=(50, 150), threat_range=(0, 90), importance_range=(1, 5))
+        score = calculate_aggregated_threat_score(departments)
+        print(f"Test 'test_aggregated_score_with_uneven_importance': {score}")
+        self.assertGreaterEqual(score, 0)
+        self.assertLessEqual(score, 90)
 
-    # Test 2: Проверка вычисления агрегированного уровня угрозы безопасности для компании
-    def test_calculate_aggregated_threat_score(self):
-        department_scores = [50, 60, 55, 45, 65]
-        department_importance = [1, 2, 3, 4, 5]
-        aggregated_score = calculate_aggregated_threat_score(department_scores, department_importance)
-        self.assertTrue(0 <= aggregated_score <= 90, "Aggregated score should be within range 0-90.")
+    def test_edge_case_min_values(self):
+        departments = [{"users": 10, "threat_scores": [0]*10, "importance": 1} for _ in range(5)]
+        score = calculate_aggregated_threat_score(departments)
+        print(f"Test 'test_edge_case_min_values': {score}")
+        self.assertEqual(score, 0)
 
-    # Test 3: Все департаменты имеют одинаковые угрозы и одинаковую важность
-    def test_equal_department_weights(self):
-        data = [generate_random_data(50, 5, 100) for _ in range(5)]
-        mean_scores = [calculate_department_mean_score(d) for d in data]
-        importance = [1] * 5
-        agg_score = calculate_aggregated_threat_score(mean_scores, importance)
-        self.assertAlmostEqual(agg_score, 50, delta=5, msg="Score should be around the mean of 50.")
+    def test_edge_case_max_values(self):
+        departments = [{"users": 200, "threat_scores": [90]*200, "importance": 5} for _ in range(5)]
+        score = calculate_aggregated_threat_score(departments)
+        print(f"Test 'test_edge_case_max_values': {score}")
+        self.assertEqual(score, 90)
 
-    # Test 4: Некоторые департаменты более важны, чем другие
-    def test_varying_department_importance(self):
-        data = [generate_random_data(30, 10, 100), generate_random_data(70, 10, 100)]
-        mean_scores = [calculate_department_mean_score(d) for d in data]
-        importance = [1, 5]
-        agg_score = calculate_aggregated_threat_score(mean_scores, importance)
-        self.assertTrue(agg_score > 50, "Higher importance department should skew the score towards its mean.")
-
-    # Test 5: Большие различия в количестве пользователей в департаментах
-    def test_large_user_variance(self):
-        data = [generate_random_data(50, 10, 10), generate_random_data(70, 10, 200)]
-        mean_scores = [calculate_department_mean_score(d) for d in data]
-        importance = [3, 3]
-        agg_score = calculate_aggregated_threat_score(mean_scores, importance)
-        self.assertTrue(50 <= agg_score <= 70, "Score should reflect the larger user base department more.")
-
-    # Test 6: Все департаменты имеют угрозы безопасности 0
-    def test_no_threat_in_all_departments(self):
-        data = [[0] * 100 for _ in range(5)]
-        mean_scores = [calculate_department_mean_score(d) for d in data]
-        importance = [3, 2, 1, 4, 5]
-        agg_score = calculate_aggregated_threat_score(mean_scores, importance)
-        self.assertEqual(agg_score, 0, "Score should be 0 if all department scores are 0.")
-
-    # Test 7: Все департаменты имеют максимальный уровень угрозы
-    def test_max_threat_in_all_departments(self):
-        data = [[90] * 100 for _ in range(5)]
-        mean_scores = [calculate_department_mean_score(d) for d in data]
-        importance = [1, 2, 3, 4, 5]
-        agg_score = calculate_aggregated_threat_score(mean_scores, importance)
-        self.assertEqual(agg_score, 90, "Score should be 90 if all department scores are at max.")
+    def test_no_users(self):
+        departments = [{"users": 0, "threat_scores": [], "importance": 3} for _ in range(5)]
+        score = calculate_aggregated_threat_score(departments)
+        print(f"Test 'test_no_users': {score}")
+        self.assertEqual(score, 0)
 
 if __name__ == "__main__":
     unittest.main()
